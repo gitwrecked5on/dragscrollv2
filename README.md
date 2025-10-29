@@ -1,118 +1,170 @@
 # DragScrollV2
 
-**Making Mac mice suck less** - A menu bar wrapper for DragScroll
+A menu bar app for macOS that provides easy control over drag-scrolling functionality.
 
-## The Story (Why This Exists)
+Built on top of [emreyolcu/drag-scroll](https://github.com/emreyolcu/drag-scroll) with a user-friendly UI similar to Rectangle.app.
 
-If you're a Windows refugee forced to use a Mac, you've probably noticed: **mouse support on macOS is genuinely terrible**.
+## What This Does
 
-On Windows, middle-click drag scrolling "just works." You click the middle mouse button, move the mouse, and boom - smooth scrolling in any direction.
+- **Menu bar icon** that shows drag-scroll status
+- **Two activation modes:**
+  - **Middle Mouse Toggle**: Click middle mouse button to turn scrolling on/off
+  - **Ctrl+Option Hold**: Hold Ctrl+Option while dragging to scroll
+- **Speed control**: Slow, Normal, Fast presets
+- **Settings persist** across restarts
 
-On Mac? Nothing. Apple expects you to use their trackpad.
+## Requirements
 
-### The Journey
-
-I spent hours trying solutions:
-- Hammerspoon (compatibility issues)
-- Mac Mouse Fix ($3)
-- Smart Scroll ($14)
-- Found [DragScroll](https://github.com/emreyolcu/drag-scroll) by Emre Yolcu (great, but command-line only)
-
-**So I built this wrapper.**
-
-## Features
-
-- ✅ Menu bar icon (🖱️🚫 = dormant, 🖱️ = active)
-- ✅ Click to toggle on/off
-- ✅ Visual notifications
-- ✅ Activation methods:
-  - **Ctrl + Option** (recommended - preserves middle-click)
-  - **Middle Mouse Button**
-- ✅ Speed presets (Slow/Normal/Fast)
-- ✅ Launch at login
-- ✅ **100% FREE**
+- macOS 10.9 or later (tested on Sequoia 15.3.1)
+- Python 3 (tested with Python 3.14)
+- A mouse (for middle-click mode)
 
 ## Installation
 
-### Quick Start
+**1. Run the installer:**
 
 ```bash
-cd dragscrollv2
+cd /Users/av/Create\ Stuff/dragscrollv2
+chmod +x install.sh
 ./install.sh
-python3 src/dragscroll-menubar.py
 ```
 
-### Detailed Steps
+The installer will:
+- Download the DragScroll binary
+- Install it to `/Applications/DragScroll.app`
+- Install Python dependencies (rumps)
+- Fix Python 3.10+ compatibility issues automatically
 
-1. **Run installer**:
-   ```bash
-   ./install.sh
-   ```
+**2. Grant accessibility permissions:**
 
-2. **Launch menu bar app**:
-   ```bash
-   python3 src/dragscroll-menubar.py
-   ```
+The installer will prompt you to open System Settings. You need to:
 
-3. **Grant Accessibility permissions**:
-   - macOS will prompt you
-   - Go to System Settings → Privacy & Security → Accessibility
-   - Enable DragScroll
+1. Go to **System Settings** → **Privacy & Security** → **Accessibility**
+2. Click the **+** button (you may need to unlock with your password)
+3. Navigate to `/Applications` and add **DragScroll.app**
+4. Make sure the checkbox next to DragScroll is **enabled**
 
-4. **Enable and test**:
-   - Click 🖱️🚫 in menu bar → "Enable DragScroll"
-   - Hold **Ctrl + Option** and move mouse
-   - Should scroll!
+**Important:** Only DragScroll.app needs permissions, not DragScrollV2.
 
-5. **(Optional) Enable Launch at Login**:
-   - Click menu bar icon → "Launch at Login"
+**3. Launch the app:**
+
+```bash
+python3 src/dragscrollv2.py
+```
+
+You should see a 🖱️ icon appear in your menu bar.
 
 ## Usage
 
-### Basic
+### First Time Setup
 
-1. Enable: Click 🖱️🚫 → "Enable DragScroll"
-2. Activate scrolling: Hold **Ctrl + Option** + move mouse
-3. Disable: Click 🖱️ → "Disable DragScroll"
+1. Click the 🖱️ icon in your menu bar
+2. Click **"Enable DragScroll"**
+3. The icon will change to show it's active
+4. Choose your activation mode:
+   - **Middle Mouse (Toggle)** - Click to turn on, move mouse to scroll, click again to turn off
+   - **Ctrl+Option (Hold)** - Hold keys + drag to scroll
 
-### Tips
+### Changing Settings
 
-- **Use Ctrl + Option** - Keeps middle-click working for opening links
-- **Adjust speed** - Try different presets
-- **Per-app conflicts** - Disable when needed (some apps conflict)
+Click the menu bar icon to access:
+- **Enable/Disable** - Toggle the app on/off
+- **Activation Mode** - Switch between middle mouse and Ctrl+Option
+- **Speed** - Adjust scrolling speed (Slow/Normal/Fast)
+
+### Testing It Works
+
+**For Middle Mouse Toggle mode:**
+1. Click your middle mouse button (scroll wheel click)
+2. Move your mouse (don't hold any buttons)
+3. The window under your mouse should scroll
+4. Click middle button again to turn off
+
+**For Ctrl+Option Hold mode:**
+1. Hold down Ctrl+Option keys
+2. Click and drag with your mouse
+3. The window should scroll
+4. Release the keys to stop
 
 ## Troubleshooting
 
-**App not scrolling?**
-- Check Accessibility permissions
-- Verify correct keys (Ctrl + Option)
-- Try different speeds
+### "Menu bar icon doesn't appear"
 
-**Middle-click not working?**
-- Switch to "Ctrl + Option" mode in settings
-
-**App won't start?**
+Check for errors:
 ```bash
-pip3 install rumps --break-system-packages
+python3 src/dragscrollv2.py
 ```
 
-See TROUBLESHOOTING.md for more help.
+If you see import errors, try reinstalling:
+```bash
+./install.sh
+```
 
-## Technical Details
+### "Scrolling doesn't work"
 
-- **Python 3** + **rumps**: Menu bar interface
-- **C** (DragScroll): Core engine
-- **RAM Usage**: ~20-35 MB (lightweight)
+1. **Check if DragScroll is running:**
+   ```bash
+   pgrep -x DragScroll
+   ```
+   Should return a process ID. If not, DragScroll crashed.
+
+2. **Check accessibility permissions:**
+   - System Settings → Privacy & Security → Accessibility
+   - Make sure DragScroll.app is in the list and enabled
+
+3. **Try launching DragScroll manually:**
+   ```bash
+   open -a DragScroll
+   ```
+   If you get a permission popup, grant it.
+
+### "Middle mouse button doesn't work"
+
+Your mouse might not have a middle button or it might be button 2. Try Ctrl+Option mode instead.
+
+### "DragScroll keeps asking for accessibility permissions"
+
+This happens if macOS doesn't recognize the app. Try:
+```bash
+cd /Applications
+xattr -dr com.apple.quarantine DragScroll.app
+```
+
+Then remove and re-add it in System Settings → Accessibility.
+
+## How It Works
+
+This app is just a thin wrapper around the original DragScroll binary:
+
+1. **DragScrollV2** (the menu bar app) starts/stops **DragScroll** (the C binary)
+2. DragScroll does the actual mouse/keyboard monitoring and scrolling
+3. DragScrollV2 just makes it easier to control
+
+All the heavy lifting is done by the original emreyolcu/drag-scroll project.
+
+## Uninstallation
+
+```bash
+# Remove the apps
+rm -rf /Applications/DragScroll.app
+killall DragScrollV2 2>/dev/null
+
+# Remove preferences
+defaults delete com.emreyolcu.DragScroll 2>/dev/null
+
+# Remove from accessibility permissions
+# Go to System Settings → Privacy & Security → Accessibility
+# Remove DragScroll from the list
+
+# Uninstall Python packages (optional)
+pip3 uninstall -y rumps pyobjc-framework-Cocoa
+```
 
 ## Credits
 
-- **Original DragScroll**: [Emre Yolcu](https://github.com/emreyolcu/drag-scroll)
-- **Wrapper & UI**: [gitwrecked5on](https://github.com/gitwrecked5on)
+- Original DragScroll by [emreyolcu](https://github.com/emreyolcu/drag-scroll)
+- Menu bar UI built with [rumps](https://github.com/jaredks/rumps)
 
 ## License
 
-MIT License - See [LICENSE](LICENSE)
-
----
-
-**Why doesn't macOS have this built-in?** 🤷‍♂️
+MIT License - Same as the original DragScroll project
