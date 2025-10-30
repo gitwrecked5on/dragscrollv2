@@ -73,7 +73,7 @@ def is_dragscroll_running():
             ['pgrep', '-x', 'DragScroll'],
             capture_output=True,
             text=True
-  )
+        )
         # pgrep returns 0 if found, 1 if not found
         return result.returncode == 0
     except Exception as e:
@@ -148,6 +148,7 @@ def configure_dragscroll(mode, speed):
     Mode can be:
     - "ctrl_option": Hold Ctrl+Option keys to activate scrolling
     - "middle_mouse": Click middle mouse button to toggle scrolling on/off
+    - "shift": Hold Shift key to activate scrolling
     
     Speed is an integer (1-10, where 3 is normal).
     
@@ -169,6 +170,19 @@ def configure_dragscroll(mode, speed):
                 check=True
             )
             print("Configured for middle mouse button toggle mode")
+            
+        elif mode == "shift":
+            # Setting button to 0 disables button mode
+            subprocess.run(
+                ['defaults', 'write', 'com.emreyolcu.DragScroll', 'button', '-int', '0'],
+                check=True
+            )
+            # Set modifier key to Shift (this is DragScroll's default)
+            subprocess.run(
+                ['defaults', 'write', 'com.emreyolcu.DragScroll', 'keys', '-array', 'shift'],
+                check=True
+            )
+            print("Configured for Shift hold mode")
             
         else:  # ctrl_option
             # Setting button to 0 disables button mode
@@ -221,6 +235,17 @@ class DragScrollV2App(rumps.App):
         # Load user preferences
         self.prefs = load_preferences()
         
+        # Sync actual DragScroll state with saved preferences on startup
+        # This fixes the "enabled but doesn't work" issue
+        actual_running = is_dragscroll_running()
+        if self.prefs["enabled"] and not actual_running:
+            # Prefs say enabled but it's not running - fix it
+            configure_dragscroll(self.prefs["mode"], self.prefs["speed"])
+            start_dragscroll()
+        elif not self.prefs["enabled"] and actual_running:
+            # Prefs say disabled but it's running - stop it
+            stop_dragscroll()
+        
         # Build the menu
         self.menu = [
             rumps.MenuItem("Enable DragScroll", callback=self.toggle_dragscroll),
@@ -230,6 +255,7 @@ class DragScrollV2App(rumps.App):
         # Create activation mode submenu items
         self.middle_mouse_item = rumps.MenuItem("Middle Mouse (Toggle)", callback=self.set_middle_mouse)
         self.ctrl_option_item = rumps.MenuItem("Ctrl+Option (Hold)", callback=self.set_ctrl_option)
+        self.shift_item = rumps.MenuItem("Shift (Hold)", callback=self.set_shift)
         
         # Create speed submenu items
         self.slow_item = rumps.MenuItem("Slow", callback=lambda _: self.set_speed(1))
@@ -239,11 +265,13 @@ class DragScrollV2App(rumps.App):
         # Add to menu
         self.menu.add(self.middle_mouse_item)
         self.menu.add(self.ctrl_option_item)
+        self.menu.add(self.shift_item)
         self.menu.add(None)  # Separator
         self.menu.add(self.slow_item)
         self.menu.add(self.normal_item)
         self.menu.add(self.fast_item)
         self.menu.add(None)  # Separator
+        self.menu.add(rumps.MenuItem("About DragScrollV2", callback=self.show_about))
         self.menu.add(rumps.MenuItem("Quit", callback=self.quit_app))
         
         # Update the UI to reflect current state
@@ -265,6 +293,7 @@ class DragScrollV2App(rumps.App):
         # Update activation mode checkmarks
         self.middle_mouse_item.state = (self.prefs["mode"] == "middle_mouse")
         self.ctrl_option_item.state = (self.prefs["mode"] == "ctrl_option")
+        self.shift_item.state = (self.prefs["mode"] == "shift")
         
         # Update speed checkmarks
         speed = self.prefs["speed"]
@@ -366,6 +395,29 @@ class DragScrollV2App(rumps.App):
             self.update_ui()
     
     
+    def set_shift(self, sender):
+        """
+        Switch to Shift hold mode.
+        """
+        if self.prefs["mode"] != "shift":
+            self.prefs["mode"] = "shift"
+            save_preferences(self.prefs)
+            
+            # If DragScroll is running, restart it with new config
+            if self.prefs["enabled"]:
+                configure_dragscroll(self.prefs["mode"], self.prefs["speed"])
+                stop_dragscroll()
+                start_dragscroll()
+                
+                rumps.notification(
+                    "DragScrollV2",
+                    "Mode Changed",
+                    "Hold Shift and drag to scroll"
+                )
+            
+            self.update_ui()
+    
+    
     def set_speed(self, speed):
         """
         Change the scrolling speed.
@@ -390,13 +442,39 @@ class DragScrollV2App(rumps.App):
             self.update_ui()
     
     
+    def show_about(self, sender):
+        """
+        Show the About dialog with credits and version info.
+        """
+        about_text = (
+            "DragScrollV2\n"
+            "Version 1.0\n\n"
+            "A menu bar wrapper for easy drag-scrolling on macOS.\n\n"
+            "Credits:\n"
+            "• Original DragScroll by Emre Yolcu\n"
+            "  github.com/emreyolcu/drag-scroll\n"
+            "• DragScrollV2 wrapper by gitwrecked5on\n"
+            "  https://github.com/gitwrecked5on/dragscrollv2\n\n"
+            "Built with rumps (Ridiculously Uncomplicated macOS Python Statusbar apps)\n"
+            "License: MIT"
+        )
+        
+        rumps.alert(
+            title="About DragScrollV2",
+            message=about_text,
+            ok="OK"
+        )
+    
+    
     def quit_app(self, sender):
         """
         Clean up and quit the app.
         """
-        # Stop DragScroll if it's running
-        if self.prefs["enabled"]:
+        # ALWAYS stop DragScroll when quitting the UI, regardless of enabled state
+        # This ensures the UI and the backend stay in sync
+        if is_dragscroll_running():
             stop_dragscroll()
+            print("Stopped DragScroll on quit")
         
         # Quit
         rumps.quit_application()

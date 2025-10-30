@@ -7,9 +7,10 @@ Built on top of [emreyolcu/drag-scroll](https://github.com/emreyolcu/drag-scroll
 ## What This Does
 
 - **Menu bar icon** that shows drag-scroll status
-- **Two activation modes:**
+- **Three activation modes:**
   - **Middle Mouse Toggle**: Click middle mouse button to turn scrolling on/off
   - **Ctrl+Option Hold**: Hold Ctrl+Option while dragging to scroll
+  - **Shift Hold**: Hold Lshit while dragging to scroll
 - **Speed control**: Slow, Normal, Fast presets
 - **Settings persist** across restarts
 
