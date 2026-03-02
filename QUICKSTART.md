@@ -1,55 +1,73 @@
-# Quick Start Guide
+# DragScrollV2 – Quick Start
 
-## First Time? Start Here
+## For End Users (Installing from DMG)
 
-### Step 1: Install
-```bash
-cd /Users/av/Create\ Stuff/dragscrollv2
-chmod +x install.sh
-./install.sh
-```
+### Step 1: Download
+Download `DragScrollV2-v1.0.dmg` from the [Releases page](https://github.com/gitwrecked5on/dragscrollv2/releases).
 
-Wait for it to finish. When it asks to open System Settings, press Enter.
-
-### Step 2: Grant Permissions
-
-In System Settings:
-1. Click Privacy & Security → Accessibility
-2. Click the + button (unlock if needed)
-3. Add `/Applications/DragScroll.app`
-4. Make sure it's checked ✓
+### Step 2: Install
+1. Double-click the DMG
+2. Drag **DragScrollV2** into the **Applications** folder
+3. Eject the DMG
 
 ### Step 3: Launch
+Open DragScrollV2 from your Applications folder.
+
+> On first launch it will automatically install DragScroll (the scrolling engine) to /Applications. This is normal.
+
+### Step 4: Grant Permissions
+macOS will prompt you to allow Accessibility access. You **must** do this or scrolling won't work.
+
+1. Click "Open System Settings" when prompted
+2. Go to **Privacy & Security → Accessibility**
+3. Find **DragScroll** and toggle it **ON**
+
+### Step 5: Use It
+Click the 🖱️ icon in your menu bar → **Enable DragScroll**
+
+**Default mode — Ctrl+Option+drag:**
+- Hold Ctrl+Option, then click and drag anywhere to scroll
+- Release the keys to stop
+
+**To switch to Middle Mouse mode:**
+- Click 🖱️ → Activation Mode → Middle Mouse (Toggle)
+- Click your middle mouse button to start scrolling, click again to stop
+
+---
+
+## For Developers (Building from Source)
+
+### Prerequisites
+- macOS
+- Python 3
+- Internet connection (DragScroll is downloaded automatically if not present)
+
+### Build
 
 ```bash
-python3 src/dragscrollv2.py
+git clone https://github.com/gitwrecked5on/dragscrollv2.git
+cd dragscrollv2
+chmod +x build_dmg.sh
+./build_dmg.sh
 ```
 
-You'll see a 🖱️ icon in your menu bar.
+This produces `DragScrollV2-v1.0.dmg`. Follow the end user steps above to install it.
 
-### Step 4: Enable
+---
 
-Click the 🖱️ icon → Click "Enable DragScroll"
+## Troubleshooting
 
-### Step 5: Test
+**Scrolling doesn't work:**
+Go to System Settings → Privacy & Security → Accessibility.
+Remove DragScroll from the list, re-add it, and make sure it's toggled ON.
 
-**Default mode is Ctrl+Option+drag:**
-1. Hold down Ctrl+Option keys on your keyboard
-2. Click and drag your mouse
-3. The window should scroll!
-4. Release the keys to stop
+**App shows in Dock instead of menu bar only:**
+Make sure you're launching DragScrollV2.app, not running dragscrollv2.py directly with Python.
 
-**To try middle mouse mode:**
-1. Click the 🖱️ icon
-2. Go to Activation Mode → Middle Mouse (Toggle)
-3. Click your middle mouse button once
-4. Move your mouse (don't hold anything)
-5. Click middle mouse again to stop
-
-## That's It!
-
-The app runs in the background. To quit, click the icon → Quit.
-
-## Need Help?
-
-See the full README.md for troubleshooting.
+**To fully uninstall:**
+```bash
+killall DragScroll 2>/dev/null; killall DragScrollV2 2>/dev/null
+rm -rf /Applications/DragScroll.app /Applications/DragScrollV2.app
+rm -f ~/Library/Preferences/com.emreyolcu.DragScroll.plist
+rm -f ~/.dragscrollv2_prefs.json
+```

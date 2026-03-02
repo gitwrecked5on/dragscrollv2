@@ -1,60 +1,124 @@
 #!/usr/bin/env python3
 """
 DragScrollV2 - Menu Bar Controller for DragScroll
-A simple menu bar app that controls the DragScroll binary.
+A menu bar app that controls the DragScroll binary.
 
-This app does NOT do the actual drag-scrolling. It just starts/stops
-the DragScroll binary and configures it via macOS defaults commands.
+This app does NOT do the actual drag-scrolling. It manages the
+DragScroll binary which does all the real work.
 
-All the actual mouse/keyboard monitoring and scrolling is handled by
-the original DragScroll C binary by emreyolcu.
+The DragScroll binary (by emreyolcu) is bundled inside this app.
+On first launch we copy it to /Applications so macOS can find it.
 """
 
 import rumps
 import subprocess
 import json
 import os
+import sys
+import shutil
 from pathlib import Path
 
 # =============================================================================
 # CONFIGURATION
 # =============================================================================
 
-# Where we store user preferences (in their home directory)
 PREFS_FILE = Path.home() / ".dragscrollv2_prefs.json"
 
-# Default settings
 DEFAULT_PREFS = {
-    "enabled": False,           # Is DragScroll currently running?
-    "mode": "ctrl_option",      # "ctrl_option" or "middle_mouse"
-    "speed": 3                  # Scrolling speed (1=slow, 3=normal, 5=fast)
+    "enabled": False,
+    "mode": "ctrl_option",
+    "speed": 3,
+    "launch_at_login": False
 }
 
+APP_NAME = "DragScrollV2"
+
+
 # =============================================================================
-# HELPER FUNCTIONS
+# BUNDLE DETECTION & DRAGSCROLL SETUP
+# =============================================================================
+
+def get_bundle_dir():
+    if hasattr(sys, '_MEIPASS'):
+        return Path(sys._MEIPASS)
+    else:
+        return Path(__file__).parent
+
+
+def ensure_dragscroll_installed():
+    dragscroll_dest = Path("/Applications/DragScroll.app")
+    if dragscroll_dest.exists():
+        return True
+    bundle_dir = get_bundle_dir()
+    dragscroll_source = bundle_dir / "DragScroll.app"
+    if not dragscroll_source.exists():
+        print(f"DragScroll.app not found in bundle at: {dragscroll_source}")
+        return False
+    print("First launch: installing DragScroll.app to /Applications...")
+    try:
+        shutil.copytree(str(dragscroll_source), str(dragscroll_dest))
+        subprocess.run(['xattr', '-dr', 'com.apple.quarantine', str(dragscroll_dest)], capture_output=True)
+        print("DragScroll.app installed successfully.")
+        return True
+    except Exception as e:
+        print(f"Failed to install DragScroll.app: {e}")
+        return False
+
+
+# =============================================================================
+# LAUNCH AT LOGIN
+# =============================================================================
+
+def get_app_path():
+    if hasattr(sys, '_MEIPASS'):
+        return str(Path(sys.executable).parent.parent.parent)
+    return None
+
+
+def set_launch_at_login(enabled):
+    app_path = get_app_path()
+    if not app_path:
+        print("Launch at login: skipped (not running as bundled app)")
+        return
+    if enabled:
+        script = f'''
+        tell application "System Events"
+            if not (exists login item "{APP_NAME}") then
+                make login item at end with properties {{path:"{app_path}", hidden:false}}
+            end if
+        end tell
+        '''
+    else:
+        script = f'''
+        tell application "System Events"
+            if exists login item "{APP_NAME}" then
+                delete login item "{APP_NAME}"
+            end if
+        end tell
+        '''
+    try:
+        subprocess.run(['osascript', '-e', script], capture_output=True)
+        print(f"Launch at login: {'enabled' if enabled else 'disabled'}")
+    except Exception as e:
+        print(f"Error setting launch at login: {e}")
+
+
+# =============================================================================
+# PREFERENCES
 # =============================================================================
 
 def load_preferences():
-    """
-    Load user preferences from disk.
-    If the file doesn't exist, return default preferences.
-    """
     if PREFS_FILE.exists():
         try:
             with open(PREFS_FILE, 'r') as f:
                 prefs = json.load(f)
-                # Merge with defaults in case new settings were added
                 return {**DEFAULT_PREFS, **prefs}
         except Exception as e:
             print(f"Error loading preferences: {e}")
-            return DEFAULT_PREFS.copy()
     return DEFAULT_PREFS.copy()
 
 
 def save_preferences(prefs):
-    """
-    Save user preferences to disk.
-    """
     try:
         with open(PREFS_FILE, 'w') as f:
             json.dump(prefs, f, indent=2)
@@ -62,429 +126,245 @@ def save_preferences(prefs):
         print(f"Error saving preferences: {e}")
 
 
+# =============================================================================
+# DRAGSCROLL PROCESS MANAGEMENT
+# =============================================================================
+
 def is_dragscroll_running():
-    """
-    Check if the DragScroll process is currently running.
-    Returns: True if running, False otherwise
-    """
     try:
-        # Use pgrep to find the DragScroll process
-        result = subprocess.run(
-            ['pgrep', '-x', 'DragScroll'],
-            capture_output=True,
-            text=True
-        )
-        # pgrep returns 0 if found, 1 if not found
+        result = subprocess.run(['pgrep', '-x', 'DragScroll'], capture_output=True, text=True)
         return result.returncode == 0
     except Exception as e:
-        print(f"Error checking if DragScroll is running: {e}")
+        print(f"Error checking DragScroll status: {e}")
         return False
 
 
 def start_dragscroll():
-    """
-    Start the DragScroll binary.
-    
-    IMPORTANT: We use 'open -a' instead of running the binary directly.
-    This is required for macOS to properly recognize the accessibility permissions.
-    
-    Returns: True if started successfully, False otherwise
-    """
     try:
-        # Check if it's already running
         if is_dragscroll_running():
-            print("DragScroll is already running")
             return True
-        
-        # Start DragScroll using 'open -a' (macOS application launcher)
-        # This ensures macOS recognizes it as the app we granted permissions to
-        subprocess.Popen(
-            ['open', '-a', 'DragScroll'],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
-        )
-        
-        # Give it a moment to start
+        subprocess.Popen(['open', '-a', 'DragScroll'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         import time
         time.sleep(0.5)
-        
-        # Verify it started
         if is_dragscroll_running():
-            print("DragScroll started successfully")
+            print("DragScroll started.")
             return True
         else:
-            print("DragScroll failed to start - check accessibility permissions")
+            print("DragScroll failed to start - check Accessibility permissions.")
             return False
-            
     except Exception as e:
         print(f"Error starting DragScroll: {e}")
         return False
 
 
 def stop_dragscroll():
-    """
-    Stop the DragScroll binary.
-    """
     try:
         if not is_dragscroll_running():
-            print("DragScroll is not running")
             return True
-        
-        # Kill the DragScroll process
         subprocess.run(['killall', 'DragScroll'], check=False)
-        
-        print("DragScroll stopped")
+        print("DragScroll stopped.")
         return True
-        
     except Exception as e:
         print(f"Error stopping DragScroll: {e}")
         return False
 
 
 def configure_dragscroll(mode, speed):
-    """
-    Configure DragScroll via macOS defaults commands.
-    
-    Mode can be:
-    - "ctrl_option": Hold Ctrl+Option keys to activate scrolling
-    - "middle_mouse": Click middle mouse button to toggle scrolling on/off
-    - "shift": Hold Shift key to activate scrolling
-    
-    Speed is an integer (1-10, where 3 is normal).
-    
-    These settings are written to macOS preferences and DragScroll reads them.
-    DragScroll must be restarted for changes to take effect.
-    """
     try:
-        # Configure activation mode
         if mode == "middle_mouse":
-            # Button 3 = middle mouse (scroll wheel click)
-            # Setting button to non-zero enables button toggle mode
-            subprocess.run(
-                ['defaults', 'write', 'com.emreyolcu.DragScroll', 'button', '-int', '3'],
-                check=True
-            )
-            # Clear modifier keys (empty array = disabled)
-            subprocess.run(
-                ['defaults', 'write', 'com.emreyolcu.DragScroll', 'keys', '-array'],
-                check=True
-            )
-            print("Configured for middle mouse button toggle mode")
-            
+            subprocess.run(['defaults', 'write', 'com.emreyolcu.DragScroll', 'button', '-int', '3'], check=True)
+            subprocess.run(['defaults', 'write', 'com.emreyolcu.DragScroll', 'keys', '-array'], check=True)
         elif mode == "shift":
-            # Setting button to 0 disables button mode
-            subprocess.run(
-                ['defaults', 'write', 'com.emreyolcu.DragScroll', 'button', '-int', '0'],
-                check=True
-            )
-            # Set modifier key to Shift (this is DragScroll's default)
-            subprocess.run(
-                ['defaults', 'write', 'com.emreyolcu.DragScroll', 'keys', '-array', 'shift'],
-                check=True
-            )
-            print("Configured for Shift hold mode")
-            
+            subprocess.run(['defaults', 'write', 'com.emreyolcu.DragScroll', 'button', '-int', '0'], check=True)
+            subprocess.run(['defaults', 'write', 'com.emreyolcu.DragScroll', 'keys', '-array', 'shift'], check=True)
         else:  # ctrl_option
-            # Setting button to 0 disables button mode
-            subprocess.run(
-                ['defaults', 'write', 'com.emreyolcu.DragScroll', 'button', '-int', '0'],
-                check=True
-            )
-            # Set modifier keys to Control + Option
-            subprocess.run(
-                ['defaults', 'write', 'com.emreyolcu.DragScroll', 'keys', '-array', 'control', 'option'],
-                check=True
-            )
-            print("Configured for Ctrl+Option hold mode")
-        
-        # Configure speed
-        subprocess.run(
-            ['defaults', 'write', 'com.emreyolcu.DragScroll', 'speed', '-int', str(speed)],
-            check=True
-        )
-        print(f"Configured speed: {speed}")
-        
+            subprocess.run(['defaults', 'write', 'com.emreyolcu.DragScroll', 'button', '-int', '0'], check=True)
+            subprocess.run(['defaults', 'write', 'com.emreyolcu.DragScroll', 'keys', '-array', 'control', 'option'], check=True)
+        subprocess.run(['defaults', 'write', 'com.emreyolcu.DragScroll', 'speed', '-int', str(speed)], check=True)
         return True
-        
     except Exception as e:
         print(f"Error configuring DragScroll: {e}")
         return False
 
 
 # =============================================================================
-# MENU BAR APP CLASS
+# MENU BAR APP
 # =============================================================================
 
 class DragScrollV2App(rumps.App):
-    """
-    The main menu bar application.
-    
-    This creates a menu bar icon and handles user interactions.
-    All the actual drag-scrolling is done by the DragScroll binary.
-    """
-    
+
     def __init__(self):
-        # Initialize the app with a mouse icon
-        # The icon will show the current status
-        super(DragScrollV2App, self).__init__(
-            "DragScrollV2",
-            icon=None,  # We'll set this based on status
-            quit_button=None  # We'll add our own quit button
-        )
-        
-        # Load user preferences
+        super(DragScrollV2App, self).__init__("DragScrollV2", icon=None, quit_button=None)
+
         self.prefs = load_preferences()
-        
-        # Sync actual DragScroll state with saved preferences on startup
-        # This fixes the "enabled but doesn't work" issue
-        actual_running = is_dragscroll_running()
-        if self.prefs["enabled"] and not actual_running:
-            # Prefs say enabled but it's not running - fix it
-            configure_dragscroll(self.prefs["mode"], self.prefs["speed"])
-            start_dragscroll()
-        elif not self.prefs["enabled"] and actual_running:
-            # Prefs say disabled but it's running - stop it
+
+        if not ensure_dragscroll_installed():
+            rumps.alert("DragScroll Not Found", "DragScroll.app could not be installed.\nPlease reinstall DragScrollV2 from the DMG.")
+
+        if is_dragscroll_running():
             stop_dragscroll()
-        
-        # Build the menu
-        self.menu = [
-            rumps.MenuItem("Enable DragScroll", callback=self.toggle_dragscroll),
-            None,  # Separator
-        ]
-        
-        # Create activation mode submenu items
-        self.middle_mouse_item = rumps.MenuItem("Middle Mouse (Toggle)", callback=self.set_middle_mouse)
-        self.ctrl_option_item = rumps.MenuItem("Ctrl+Option (Hold)", callback=self.set_ctrl_option)
-        self.shift_item = rumps.MenuItem("Shift (Hold)", callback=self.set_shift)
-        
-        # Create speed submenu items
-        self.slow_item = rumps.MenuItem("Slow", callback=lambda _: self.set_speed(1))
-        self.normal_item = rumps.MenuItem("Normal", callback=lambda _: self.set_speed(3))
-        self.fast_item = rumps.MenuItem("Fast", callback=lambda _: self.set_speed(5))
-        
-        # Add to menu
+        self.prefs["enabled"] = False
+        save_preferences(self.prefs)
+
+        # ── FLAT MENU - no submenus ────────────────────────────────────
+        self.menu.add(rumps.MenuItem("Enable DragScroll", callback=self.toggle_dragscroll))
+        self.menu.add(None)
+
+        self.menu.add(rumps.MenuItem("── Activation Mode ──"))
+        self.middle_mouse_item = rumps.MenuItem("  Middle Mouse (Toggle)", callback=self.set_middle_mouse)
+        self.ctrl_option_item  = rumps.MenuItem("  Ctrl+Option (Hold)",    callback=self.set_ctrl_option)
+        self.shift_item        = rumps.MenuItem("  Shift (Hold)",           callback=self.set_shift)
         self.menu.add(self.middle_mouse_item)
         self.menu.add(self.ctrl_option_item)
         self.menu.add(self.shift_item)
-        self.menu.add(None)  # Separator
+        self.menu.add(None)
+
+        self.menu.add(rumps.MenuItem("── Scroll Speed ──"))
+        self.slow_item      = rumps.MenuItem("  Slow",      callback=lambda _: self.set_speed(1))
+        self.normal_item    = rumps.MenuItem("  Normal",    callback=lambda _: self.set_speed(3))
+        self.fast_item      = rumps.MenuItem("  Fast",      callback=lambda _: self.set_speed(5))
+        self.very_fast_item = rumps.MenuItem("  Very Fast", callback=lambda _: self.set_speed(7))
         self.menu.add(self.slow_item)
         self.menu.add(self.normal_item)
         self.menu.add(self.fast_item)
-        self.menu.add(None)  # Separator
+        self.menu.add(self.very_fast_item)
+        self.menu.add(None)
+
+        self.login_item = rumps.MenuItem("Launch at Login", callback=self.toggle_login)
+        self.menu.add(self.login_item)
+        self.menu.add(None)
+
         self.menu.add(rumps.MenuItem("About DragScrollV2", callback=self.show_about))
         self.menu.add(rumps.MenuItem("Quit", callback=self.quit_app))
-        
-        # Update the UI to reflect current state
+
         self.update_ui()
-    
-    
+
+
     def update_ui(self):
-        """
-        Update the menu bar icon and menu items to reflect current state.
-        """
-        # Update the enable/disable menu item
         if self.prefs["enabled"]:
             self.menu["Enable DragScroll"].title = "Disable DragScroll"
-            self.title = "🖱️"  # Mouse icon when enabled
+            self.title = "🖱️"
         else:
             self.menu["Enable DragScroll"].title = "Enable DragScroll"
-            self.title = "🖱️🚫"  # Mouse with slash when disabled
-        
-        # Update activation mode checkmarks
+            self.title = "🖱️🚫"
+
         self.middle_mouse_item.state = (self.prefs["mode"] == "middle_mouse")
-        self.ctrl_option_item.state = (self.prefs["mode"] == "ctrl_option")
-        self.shift_item.state = (self.prefs["mode"] == "shift")
-        
-        # Update speed checkmarks
+        self.ctrl_option_item.state  = (self.prefs["mode"] == "ctrl_option")
+        self.shift_item.state        = (self.prefs["mode"] == "shift")
+
         speed = self.prefs["speed"]
-        self.slow_item.state = (speed == 1)
-        self.normal_item.state = (speed == 3)
-        self.fast_item.state = (speed == 5)
-    
-    
+        self.slow_item.state      = (speed == 1)
+        self.normal_item.state    = (speed == 3)
+        self.fast_item.state      = (speed == 5)
+        self.very_fast_item.state = (speed == 7)
+        self.login_item.state     = self.prefs.get("launch_at_login", False)
+
+
     def toggle_dragscroll(self, sender):
-        """
-        Enable or disable DragScroll.
-        """
         if self.prefs["enabled"]:
-            # Currently enabled, so disable it
             if stop_dragscroll():
                 self.prefs["enabled"] = False
                 save_preferences(self.prefs)
                 self.update_ui()
-                rumps.notification(
-                    "DragScrollV2",
-                    "Disabled",
-                    "Drag scrolling has been disabled"
-                )
+                rumps.notification("DragScrollV2", "Disabled", "Drag scrolling is off.")
         else:
-            # Currently disabled, so enable it
-            # First, configure DragScroll with current settings
             configure_dragscroll(self.prefs["mode"], self.prefs["speed"])
-            
-            # Then start it
             if start_dragscroll():
                 self.prefs["enabled"] = True
                 save_preferences(self.prefs)
                 self.update_ui()
-                
-                # Show a helpful notification
-                if self.prefs["mode"] == "middle_mouse":
-                    message = "Click middle mouse button to toggle scrolling"
-                else:
-                    message = "Hold Ctrl+Option and drag to scroll"
-                
-                rumps.notification(
-                    "DragScrollV2",
-                    "Enabled",
-                    message
-                )
+                msg = ("Click middle mouse button to toggle scrolling"
+                       if self.prefs["mode"] == "middle_mouse"
+                       else "Hold Ctrl+Option and drag to scroll")
+                rumps.notification("DragScrollV2", "Enabled", msg)
             else:
-                # Failed to start
-                rumps.alert(
-                    "Failed to start DragScroll",
-                    "Make sure you've granted accessibility permissions.\n\n"
-                    "Go to System Settings → Privacy & Security → Accessibility\n"
-                    "and add /Applications/DragScroll.app"
-                )
-    
-    
+                rumps.alert("Failed to Start DragScroll",
+                    "Grant Accessibility permissions to DragScroll:\n\n"
+                    "System Settings → Privacy & Security → Accessibility\n"
+                    "Add DragScroll.app and toggle it ON.")
+
+
     def set_middle_mouse(self, sender):
-        """
-        Switch to middle mouse button toggle mode.
-        """
-        if self.prefs["mode"] != "middle_mouse":
-            self.prefs["mode"] = "middle_mouse"
-            save_preferences(self.prefs)
-            
-            # If DragScroll is running, restart it with new config
-            if self.prefs["enabled"]:
-                configure_dragscroll(self.prefs["mode"], self.prefs["speed"])
-                stop_dragscroll()
-                start_dragscroll()
-                
-                rumps.notification(
-                    "DragScrollV2",
-                    "Mode Changed",
-                    "Click middle mouse button to toggle scrolling"
-                )
-            
-            self.update_ui()
-    
-    
+        self._set_mode("middle_mouse", "Click middle mouse button to toggle scrolling")
+
     def set_ctrl_option(self, sender):
-        """
-        Switch to Ctrl+Option hold mode.
-        """
-        if self.prefs["mode"] != "ctrl_option":
-            self.prefs["mode"] = "ctrl_option"
-            save_preferences(self.prefs)
-            
-            # If DragScroll is running, restart it with new config
-            if self.prefs["enabled"]:
-                configure_dragscroll(self.prefs["mode"], self.prefs["speed"])
-                stop_dragscroll()
-                start_dragscroll()
-                
-                rumps.notification(
-                    "DragScrollV2",
-                    "Mode Changed",
-                    "Hold Ctrl+Option and drag to scroll"
-                )
-            
-            self.update_ui()
-    
-    
+        self._set_mode("ctrl_option", "Hold Ctrl+Option and drag to scroll")
+
     def set_shift(self, sender):
-        """
-        Switch to Shift hold mode.
-        """
-        if self.prefs["mode"] != "shift":
-            self.prefs["mode"] = "shift"
+        self._set_mode("shift", "Hold Shift and drag to scroll")
+
+    def _set_mode(self, mode, notification_msg):
+        if self.prefs["mode"] != mode:
+            self.prefs["mode"] = mode
             save_preferences(self.prefs)
-            
-            # If DragScroll is running, restart it with new config
             if self.prefs["enabled"]:
-                configure_dragscroll(self.prefs["mode"], self.prefs["speed"])
+                configure_dragscroll(mode, self.prefs["speed"])
                 stop_dragscroll()
                 start_dragscroll()
-                
-                rumps.notification(
-                    "DragScrollV2",
-                    "Mode Changed",
-                    "Hold Shift and drag to scroll"
-                )
-            
+                rumps.notification("DragScrollV2", "Mode Changed", notification_msg)
             self.update_ui()
-    
-    
+
+
     def set_speed(self, speed):
-        """
-        Change the scrolling speed.
-        """
         if self.prefs["speed"] != speed:
             self.prefs["speed"] = speed
             save_preferences(self.prefs)
-            
-            # If DragScroll is running, restart it with new config
             if self.prefs["enabled"]:
-                configure_dragscroll(self.prefs["mode"], self.prefs["speed"])
+                configure_dragscroll(self.prefs["mode"], speed)
                 stop_dragscroll()
                 start_dragscroll()
-                
-                speed_name = {1: "Slow", 3: "Normal", 5: "Fast"}.get(speed, "Custom")
-                rumps.notification(
-                    "DragScrollV2",
-                    "Speed Changed",
-                    f"Scrolling speed set to {speed_name}"
-                )
-            
+                name = {1: "Slow", 3: "Normal", 5: "Fast", 7: "Very Fast"}.get(speed, str(speed))
+                rumps.notification("DragScrollV2", "Speed Changed", f"Scroll speed: {name}")
             self.update_ui()
-    
-    
+
+
+    def toggle_login(self, sender):
+        new_state = not self.prefs.get("launch_at_login", False)
+        self.prefs["launch_at_login"] = new_state
+        save_preferences(self.prefs)
+        set_launch_at_login(new_state)
+        self.update_ui()
+
+
     def show_about(self, sender):
-        """
-        Show the About dialog with credits and version info.
-        """
-        about_text = (
-            "DragScrollV2\n"
-            "Version 1.0\n\n"
-            "A menu bar wrapper for easy drag-scrolling on macOS.\n\n"
-            "Credits:\n"
-            "• Original DragScroll by Emre Yolcu\n"
-            "  github.com/emreyolcu/drag-scroll\n"
-            "• DragScrollV2 wrapper by gitwrecked5on\n"
-            "  https://github.com/gitwrecked5on/dragscrollv2\n\n"
-            "Built with rumps (Ridiculously Uncomplicated macOS Python Statusbar apps)\n"
-            "License: MIT"
-        )
-        
+        # ── Edit the message below to customise the About screen ──
+        # \n = new line   • = bullet   ━ = divider line
         rumps.alert(
-            title="About DragScrollV2",
-            message=about_text,
-            ok="OK"
+            title="DragScrollV2  •  v1.0",
+            message=(
+                "Drag-to-scroll for macOS.\n"
+                "\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                "\n"
+                "  How to use:\n"
+                "  • Enable via the menu bar icon\n"
+                "  • Hold Ctrl+Option and drag to scroll\n"
+                "  • Or switch to Middle Mouse mode\n"
+                "\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                "\n"
+                "  Built on DragScroll by Emre Yolcu\n"
+                "  github.com/emreyolcu/drag-scroll\n"
+                "\n"
+                "  Wrapped by gitwrecked5on\n"
+                "  github.com/gitwrecked5on/dragscrollv2\n"
+                "\n"
+                "  License: MIT\n"
+            ),
+            ok="Close"
         )
-    
-    
+
+
     def quit_app(self, sender):
-        """
-        Clean up and quit the app.
-        """
-        # ALWAYS stop DragScroll when quitting the UI, regardless of enabled state
-        # This ensures the UI and the backend stay in sync
         if is_dragscroll_running():
             stop_dragscroll()
-            print("Stopped DragScroll on quit")
-        
-        # Quit
         rumps.quit_application()
 
 
 # =============================================================================
-# MAIN ENTRY POINT
+# ENTRY POINT
 # =============================================================================
 
 if __name__ == "__main__":
-    # Create and run the app
     app = DragScrollV2App()
     app.run()

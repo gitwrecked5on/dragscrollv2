@@ -1,1 +1,19 @@
+# PyInstaller build output
 private/
+build/
+dist/
+
+# DMG files - these go to GitHub Releases, not the repo
+*.dmg
+
+# macOS system files
+.DS_Store
+__pycache__/
+*.pyc
+
+# Temp files
+dmg_temp/
+/tmp/DragScroll*.zip
+
+# reference docs
+dragscrollv2.code-workspace

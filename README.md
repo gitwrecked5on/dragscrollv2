@@ -1,171 +1,120 @@
 # DragScrollV2
 
-A menu bar app for macOS that provides easy control over drag-scrolling functionality.
+Drag-to-scroll for macOS. Hold a key (or click middle mouse) and drag anywhere to scroll — the way every other OS handles it. Basically allow the user to 'pinch' the screen with their cursor, and move it around as needed.
 
-Built on top of [emreyolcu/drag-scroll](https://github.com/emreyolcu/drag-scroll) with a user-friendly UI similar to Rectangle.app.
+Built as a menu bar wrapper around [emreyolcu/drag-scroll](https://github.com/emreyolcu/drag-scroll).
 
-## What This Does
+---
 
-- **Menu bar icon** that shows drag-scroll status
-- **Three activation modes:**
-  - **Middle Mouse Toggle**: Click middle mouse button to turn scrolling on/off
-  - **Ctrl+Option Hold**: Hold Ctrl+Option while dragging to scroll
-  - **Shift Hold**: Hold Lshit while dragging to scroll
-- **Speed control**: Slow, Normal, Fast presets
-- **Settings persist** across restarts
+## For Users — Install from DMG
 
-## Requirements
+### Step 1: Download
+Get `DragScrollV2-v1.0.dmg` from the [Releases page](https://github.com/gitwrecked5on/dragscrollv2/releases).
 
-- macOS 10.9 or later (tested on Sequoia 15.3.1)
-- Python 3 (tested with Python 3.14)
-- A mouse (for middle-click mode)
+### Step 2: Install
+Open the DMG → drag **DragScrollV2** into **Applications** → eject the DMG.
 
-## Installation
+### Step 3: Launch
+Open DragScrollV2 from Applications.
 
-**1. Run the installer:**
+> On first launch, the app automatically installs DragScroll (the scrolling engine) to `/Applications`. This is expected — DragScroll is bundled inside DragScrollV2 and extracted on first run. **You will see two apps in your Applications folder: DragScroll and DragScrollV2. This is normal and cannot be avoided** — DragScrollV2 is the UI wrapper, DragScroll is the engine that does the actual mouse monitoring. macOS requires the engine to be a standalone app to grant it Accessibility permissions correctly.
 
-```bash
-cd /Users/av/Create\ Stuff/dragscrollv2
-chmod +x install.sh
-./install.sh
+### Step 4: Grant Permissions
+macOS requires Accessibility access for mouse monitoring. When prompted:
+
+1. Go to **System Settings → Privacy & Security → Accessibility**
+2. Add **DragScroll.app** and toggle it **ON**
+
+> Only DragScroll needs this permission, not DragScrollV2.
+
+### Step 5: Use It
+Click 🖱️🚫 in your menu bar → **Enable DragScroll**
+
+| Mode | How to activate |
+|------|----------------|
+| Ctrl+Option (default) | Hold Ctrl+Option, click and drag to scroll |
+| Middle Mouse | Click middle mouse button to toggle scrolling on/off |
+| Shift | Hold Shift and drag to scroll |
+
+### Updating
+Download the new DMG → drag to Applications → click **Replace** → relaunch. No uninstall needed. Your settings are preserved.
+
+### Uninstalling
+1. Click 🖱️ → **Quit**
+2. Delete **DragScrollV2.app** and **DragScroll.app** from `/Applications`
+3. Go to **System Settings → Privacy & Security → Accessibility** and remove DragScroll from the list
+4. Delete preferences: `rm -f ~/.dragscrollv2_prefs.json` (optional)
+
+---
+
+## For Developers — Build from Source
+
+### Prerequisites
+- macOS
+- Python 3
+- Internet connection (DragScroll binary is downloaded automatically if not present)
+
+### Repo Structure
+```
+dragscrollv2/
+├── src/
+│   └── dragscrollv2.py      # App logic — the only file you edit day-to-day
+├── dragscrollv2.spec         # PyInstaller config — controls how the app is packaged
+├── build_dmg.sh              # Run this to produce the DMG
+├── icon.png                  # App icon
+├── QUICKSTART.md             # End-user focused quick reference
+└── README.md
 ```
 
-The installer will:
-- Download the DragScroll binary
-- Install it to `/Applications/DragScroll.app`
-- Install Python dependencies (rumps)
-- Fix Python 3.10+ compatibility issues automatically
-
-**2. Grant accessibility permissions:**
-
-The installer will prompt you to open System Settings. You need to:
-
-1. Go to **System Settings** → **Privacy & Security** → **Accessibility**
-2. Click the **+** button (you may need to unlock with your password)
-3. Navigate to `/Applications` and add **DragScroll.app**
-4. Make sure the checkbox next to DragScroll is **enabled**
-
-**Important:** Only DragScroll.app needs permissions, not DragScrollV2.
-
-**3. Launch the app:**
-
+### Build
 ```bash
-python3 src/dragscrollv2.py
+git clone https://github.com/gitwrecked5on/dragscrollv2.git
+cd dragscrollv2
+chmod +x build_dmg.sh
+./build_dmg.sh
 ```
 
-You should see a 🖱️ icon appear in your menu bar.
+This produces `DragScrollV2-v1.0.dmg`. Follow the user install steps above to test it.
 
-## Usage
+`build/` and `dist/` are created during the build and automatically deleted once the DMG is ready. To keep them for debugging (e.g. inspecting the PyInstaller output), comment out the cleanup lines near the bottom of `build_dmg.sh`.
 
-### First Time Setup
-
-1. Click the 🖱️ icon in your menu bar
-2. Click **"Enable DragScroll"**
-3. The icon will change to show it's active
-4. Choose your activation mode:
-   - **Middle Mouse (Toggle)** - Click to turn on, move mouse to scroll, click again to turn off
-   - **Ctrl+Option (Hold)** - Hold keys + drag to scroll
-
-### Changing Settings
-
-Click the menu bar icon to access:
-- **Enable/Disable** - Toggle the app on/off
-- **Activation Mode** - Switch between middle mouse and Ctrl+Option
-- **Speed** - Adjust scrolling speed (Slow/Normal/Fast)
-
-### Testing It Works
-
-**For Middle Mouse Toggle mode:**
-1. Click your middle mouse button (scroll wheel click)
-2. Move your mouse (don't hold any buttons)
-3. The window under your mouse should scroll
-4. Click middle button again to turn off
-
-**For Ctrl+Option Hold mode:**
-1. Hold down Ctrl+Option keys
-2. Click and drag with your mouse
-3. The window should scroll
-4. Release the keys to stop
-
-## Troubleshooting
-
-### "Menu bar icon doesn't appear"
-
-Check for errors:
-```bash
-python3 src/dragscrollv2.py
+### Dev Workflow
+```
+Edit src/dragscrollv2.py
+→ ./build_dmg.sh
+→ Open DMG → drag to Applications → Replace
+→ Quit and relaunch DragScrollV2
+→ Test changes
+→ git commit && git push
 ```
 
-If you see import errors, try reinstalling:
-```bash
-./install.sh
-```
+### Releasing a New Version
+1. Update the version string in `dragscrollv2.py` (`show_about`) and `dragscrollv2.spec`
+2. Run `./build_dmg.sh`
+3. `git tag v1.x && git push --tags`
+4. Create a GitHub Release and attach the DMG
 
-### "Scrolling doesn't work"
+> The DMG is not committed to the repo. It lives on GitHub Releases only.
 
-1. **Check if DragScroll is running:**
-   ```bash
-   pgrep -x DragScroll
-   ```
-   Should return a process ID. If not, DragScroll crashed.
-
-2. **Check accessibility permissions:**
-   - System Settings → Privacy & Security → Accessibility
-   - Make sure DragScroll.app is in the list and enabled
-
-3. **Try launching DragScroll manually:**
-   ```bash
-   open -a DragScroll
-   ```
-   If you get a permission popup, grant it.
-
-### "Middle mouse button doesn't work"
-
-Your mouse might not have a middle button or it might be button 2. Try Ctrl+Option mode instead.
-
-### "DragScroll keeps asking for accessibility permissions"
-
-This happens if macOS doesn't recognize the app. Try:
-```bash
-cd /Applications
-xattr -dr com.apple.quarantine DragScroll.app
-```
-
-Then remove and re-add it in System Settings → Accessibility.
+---
 
 ## How It Works
 
-This app is just a thin wrapper around the original DragScroll binary:
+DragScrollV2 is a thin Python menu bar app (using [rumps](https://github.com/jaredks/rumps)) that wraps the DragScroll C binary:
 
-1. **DragScrollV2** (the menu bar app) starts/stops **DragScroll** (the C binary)
-2. DragScroll does the actual mouse/keyboard monitoring and scrolling
-3. DragScrollV2 just makes it easier to control
+- **DragScrollV2** — the UI. Reads your settings, starts/stops DragScroll, lives in the menu bar.
+- **DragScroll** — the engine. Monitors mouse and keyboard events, performs the actual scrolling. Written in C by [emreyolcu](https://github.com/emreyolcu).
 
-All the heavy lifting is done by the original emreyolcu/drag-scroll project.
+Settings are stored in `~/.dragscrollv2_prefs.json` and persist across updates.
 
-## Uninstallation
-
-```bash
-# Remove the apps
-rm -rf /Applications/DragScroll.app
-killall DragScrollV2 2>/dev/null
-
-# Remove preferences
-defaults delete com.emreyolcu.DragScroll 2>/dev/null
-
-# Remove from accessibility permissions
-# Go to System Settings → Privacy & Security → Accessibility
-# Remove DragScroll from the list
-
-# Uninstall Python packages (optional)
-pip3 uninstall -y rumps pyobjc-framework-Cocoa
-```
+---
 
 ## Credits
 
-- Original DragScroll by [emreyolcu](https://github.com/emreyolcu/drag-scroll)
-- Menu bar UI built with [rumps](https://github.com/jaredks/rumps)
+- [DragScroll](https://github.com/emreyolcu/drag-scroll) by Emre Yolcu — the scrolling engine
+- [rumps](https://github.com/jaredks/rumps) — macOS menu bar framework
+- DragScrollV2 wrapper by [gitwrecked5on](https://github.com/gitwrecked5on/dragscrollv2)
 
 ## License
 
-MIT License - Same as the original DragScroll project
+MIT
